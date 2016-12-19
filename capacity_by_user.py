@@ -62,21 +62,20 @@ class SampleTreeNode:
             if len(new_node.children) == 0:
                 heapq.heappush(leaves, (new_node.samples, new_node))
 
-    def __str__(self, indent="", bytes_per_sample=1, is_last=True):
+    def __str__(self, indent, format_samples, is_last=True):
         result = indent + (is_last and "\\---" or "+---") + self.name + ""
         if self.samples:
-            result += "(%s)" % (pretty_print_capacity(
-                self.sum_samples * bytes_per_sample),)
+            result += "(%s)" % (format_samples(self.sum_samples),)
 
         next_indent = indent + (is_last and "    " or "|   ")
         sorted_children = sorted(self.children.values(),
                                  lambda x, y: cmp(x.name, y.name))
         for child in sorted_children[:-1]:
             result += "\n" + child.__str__(
-                next_indent, bytes_per_sample, False)
+                next_indent, format_samples, False)
         if sorted_children:
             result += "\n" + sorted_children[-1].__str__(
-                next_indent, bytes_per_sample, True)
+                next_indent, format_samples, True)
 
         return result
 
@@ -172,20 +171,28 @@ def do_it(opts, args):
         owners.setdefault(owner, SampleTreeNode(""))
         owners[owner].insert(s["name"], 1)
 
-    print "Total: %s" % (pretty_print_capacity(total_capacity_used))
+    def format_capacity(samples):
+        bytes_per_terabyte = 1000. ** 4
+        if opts.dollars_per_terabyte != None:
+            return "$%0.02f/month" % (samples * total_capacity_used /
+                                      opts.samples /
+                                      bytes_per_terabyte *
+                                      opts.dollars_per_terabyte)
+        else:
+            return pretty_print_capacity(samples * total_capacity_used / opts.samples)
+
+    print "Total: %s" % (format_capacity(opts.samples))
     sorted_owners = sorted(owners.items(),
                            lambda x, y: cmp(y[1].sum_samples, x[1].sum_samples))
     # For each owner, print total used, then refine the tree and dump it.
     for name, tree in sorted_owners:
         print "Owner %s (~%0.1f%%/%s)" % (
             name, tree.sum_samples / float(opts.samples) * 100,
-            pretty_print_capacity(
-                tree.sum_samples / float(opts.samples) * total_capacity_used))
+            format_capacity(tree.sum_samples))
         tree.prune_until(max_leaves=opts.max_leaves,
                          min_samples=opts.min_samples)
 
-        print tree.__str__("    ",
-                           bytes_per_sample=total_capacity_used / opts.samples)
+        print tree.__str__("    ", lambda x: format_capacity(x))
 
 def process_command_line():
     usage = "usage: %prog [options] path"
@@ -217,7 +224,7 @@ def process_command_line():
 
     parser.add_option(
         "-c", "--concurrency",
-        help="The number of threads to query with", default=40,
+        help="The number of threads to query with", default=10,
         action="store", dest="concurrency", type="int")
 
     parser.add_option(
@@ -227,10 +234,16 @@ def process_command_line():
 
     parser.add_option(
         "-x", "--max-leaves",
-        help="The maximum number of leaves to show per-user",
+        help="The maximum number of leaves to show per user",
         action="store", dest="max_leaves", type="int", default=30)
 
+    parser.add_option(
+        "-D", "--dollars-per-terabyte",
+        help="Show capacity in dollars. Set conversion factor in $/TB/month",
+        action="store", dest="dollars_per_terabyte", type="float", default=None)
+
     (opts, args) = parser.parse_args()
+
     return opts, args
 
 (opts, args) = process_command_line()
