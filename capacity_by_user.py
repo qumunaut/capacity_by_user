@@ -244,6 +244,9 @@ def process_command_line():
 
     (opts, args) = parser.parse_args()
 
+    if len(args) != 1:
+        parser.error("missing required path arguuemt")
+
     return opts, args
 
 (opts, args) = process_command_line()
