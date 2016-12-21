@@ -1,5 +1,6 @@
 from qumulo.rest_client import RestClient
 import os
+import pwd
 import ssl
 import heapq
 from optparse import OptionParser
@@ -108,7 +109,11 @@ def format_owner(identities):
     for key in preferred_keys:
         for el in identities:
             if el['id_type'] == key:
-                return el["id_type"] + ":" + el["id_value"]
+                try:
+                    userid = pwd.getpwuid(int(el["id_value"])).pw_name
+                except:
+                    userid = el["id_value"]
+                return el["id_type"] + ":" + userid
     return "ERROR"
 
 @memoize
@@ -243,6 +248,9 @@ def process_command_line():
         action="store", dest="dollars_per_terabyte", type="float", default=None)
 
     (opts, args) = parser.parse_args()
+
+    if len(args) != 1:
+        parser.error("missing required path arguuemt")
 
     return opts, args
 
